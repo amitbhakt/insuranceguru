@@ -69,6 +69,10 @@ function VoiceConsole() {
     errorMessage,
     apiKey,
     setApiKey,
+    silenceHangover,
+    setSilenceHangover,
+    bargeSensitivity,
+    setBargeSensitivity,
     clearError,
     uploadPolicyPdf,
     resetPolicy,
@@ -85,8 +89,6 @@ function VoiceConsole() {
   const [loadingSample, setLoadingSample] = useState(false);
   const [showMetrics, setShowMetrics] = useState(true);
   const [query, setQuery] = useState("");
-  const [silenceHangover, setSilenceHangover] = useState([650]);
-  const [bargeSensitivity, setBargeSensitivity] = useState([300]);
   const [autoSpeak, setAutoSpeak] = useState(true);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [uploading, setUploading] = useState(false);
@@ -650,6 +652,7 @@ function VoiceConsole() {
       <SettingsDrawer
         open={showSettings}
         onOpenChange={setShowSettings}
+        status={status}
         apiKey={apiKey}
         setApiKey={setApiKey}
         silenceHangover={silenceHangover}
@@ -970,6 +973,7 @@ function ApiKeySetting({
 function SettingsDrawer({
   open,
   onOpenChange,
+  status,
   apiKey,
   setApiKey,
   silenceHangover,
@@ -981,6 +985,7 @@ function SettingsDrawer({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  status: string;
   apiKey: string;
   setApiKey: (key: string) => void;
   silenceHangover: number[];
@@ -1001,28 +1006,50 @@ function SettingsDrawer({
         <div className="mt-6 space-y-6">
           <ApiKeySetting apiKey={apiKey} setApiKey={setApiKey} />
 
-          <SliderSetting
-            id="silence-hangover"
-            label="Silence hangover"
-            note="Wait before sending your turn"
-            value={silenceHangover}
-            onValueChange={setSilenceHangover}
-            min={400}
-            max={1200}
-            step={50}
-            suffix="ms"
-          />
-          <SliderSetting
-            id="barge-in-sensitivity"
-            label="Barge-in sensitivity"
-            note="How quickly speech interrupts the assistant"
-            value={bargeSensitivity}
-            onValueChange={setBargeSensitivity}
-            min={150}
-            max={600}
-            step={25}
-            suffix="ms"
-          />
+          <div className="space-y-5 rounded-2xl border border-border bg-card p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground block">
+                  VAD & Turn Thresholds
+                </Label>
+                <p className="text-[11px] text-muted-foreground">Adjust silence hangover & barge-in</p>
+              </div>
+              {status === "connected" ? (
+                <span className="flex items-center gap-1 rounded-full bg-success/15 px-2 py-0.5 text-[10px] font-bold text-success">
+                  <span className="size-1.5 rounded-full bg-success animate-pulse" />
+                  Live Sync
+                </span>
+              ) : (
+                <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                  Saved
+                </span>
+              )}
+            </div>
+
+            <SliderSetting
+              id="silence-hangover"
+              label="Silence hangover"
+              note="Wait before sending your turn"
+              value={silenceHangover}
+              onValueChange={setSilenceHangover}
+              min={400}
+              max={1200}
+              step={50}
+              suffix="ms"
+            />
+            <SliderSetting
+              id="barge-in-sensitivity"
+              label="Barge-in sensitivity"
+              note="How quickly speech interrupts the assistant"
+              value={bargeSensitivity}
+              onValueChange={setBargeSensitivity}
+              min={150}
+              max={600}
+              step={25}
+              suffix="ms"
+            />
+          </div>
+
           <div className="flex items-center justify-between gap-4 border-t border-border pt-4">
             <div className="flex items-start gap-3">
               <span className="mt-0.5 grid size-8 place-items-center rounded-lg bg-accent text-ink"><Volume2 className="size-4" /></span>

@@ -39,6 +39,22 @@ export function useVoiceAgent() {
         setApiKeyState(stored);
         apiKeyRef.current = stored;
       }
+      const storedHangover = localStorage.getItem("vad_silence_hangover_ms");
+      if (storedHangover) {
+        const val = parseInt(storedHangover, 10);
+        if (!isNaN(val) && val >= 400 && val <= 1200) {
+          setSilenceHangoverState([val]);
+          silenceHangoverRef.current = val;
+        }
+      }
+      const storedBarge = localStorage.getItem("vad_barge_in_ms");
+      if (storedBarge) {
+        const val = parseInt(storedBarge, 10);
+        if (!isNaN(val) && val >= 150 && val <= 600) {
+          setBargeSensitivityState([val]);
+          bargeSensitivityRef.current = val;
+        }
+      }
     }
   }, []);
 
@@ -52,6 +68,48 @@ export function useVoiceAgent() {
       } else {
         localStorage.removeItem("sarvam_api_key");
       }
+    }
+  }, []);
+
+  // VAD Threshold states & dynamic WebSocket push
+  const [silenceHangover, setSilenceHangoverState] = useState<number[]>([650]);
+  const [bargeSensitivity, setBargeSensitivityState] = useState<number[]>([300]);
+  const silenceHangoverRef = useRef(650);
+  const bargeSensitivityRef = useRef(300);
+
+  const setSilenceHangover = useCallback((val: number[]) => {
+    setSilenceHangoverState(val);
+    const ms = val[0];
+    silenceHangoverRef.current = ms;
+    if (typeof window !== "undefined") {
+      localStorage.setItem("vad_silence_hangover_ms", String(ms));
+    }
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(
+        JSON.stringify({
+          type: "update_config",
+          silence_hangover_ms: ms,
+          barge_in_ms: bargeSensitivityRef.current,
+        }),
+      );
+    }
+  }, []);
+
+  const setBargeSensitivity = useCallback((val: number[]) => {
+    setBargeSensitivityState(val);
+    const ms = val[0];
+    bargeSensitivityRef.current = ms;
+    if (typeof window !== "undefined") {
+      localStorage.setItem("vad_barge_in_ms", String(ms));
+    }
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(
+        JSON.stringify({
+          type: "update_config",
+          silence_hangover_ms: silenceHangoverRef.current,
+          barge_in_ms: ms,
+        }),
+      );
     }
   }, []);
 
@@ -317,6 +375,8 @@ export function useVoiceAgent() {
         pendingQueryRef.current = null;
         const payload: Record<string, unknown> = {
           type: "start_session",
+          silence_hangover_ms: silenceHangoverRef.current,
+          barge_in_ms: bargeSensitivityRef.current,
           ...(currentKey ? { api_key: currentKey } : {}),
         };
         if (initialQuery) {
@@ -603,6 +663,10 @@ export function useVoiceAgent() {
     errorMessage,
     apiKey,
     setApiKey,
+    silenceHangover,
+    setSilenceHangover,
+    bargeSensitivity,
+    setBargeSensitivity,
     clearError,
     fetchCurrentPolicy,
     uploadPolicyPdf,

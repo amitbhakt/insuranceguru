@@ -432,6 +432,12 @@ async def websocket_audio_endpoint(websocket: WebSocket):
                             agent.system_prompt = get_system_prompt(custom_policy_override)
                             agent.messages = [{"role": "system", "content": agent.system_prompt}]
 
+                        if "silence_hangover_ms" in payload:
+                            vad.silence_hangover_ms = int(payload["silence_hangover_ms"])
+                        if "barge_in_ms" in payload:
+                            vad.barge_in_min_duration_ms = int(payload["barge_in_ms"])
+                        logger.info(f"Session started with VAD hangover={vad.silence_hangover_ms}ms, barge_in={vad.barge_in_min_duration_ms}ms")
+
                         _sync_agent_policy()
 
                         initial_query = payload.get("initial_query", "").strip()
@@ -480,6 +486,12 @@ async def websocket_audio_endpoint(websocket: WebSocket):
                             vad.silence_hangover_ms = int(payload["silence_hangover_ms"])
                         if "barge_in_ms" in payload:
                             vad.barge_in_min_duration_ms = int(payload["barge_in_ms"])
+                        logger.info(f"Updated VAD config dynamically: hangover={vad.silence_hangover_ms}ms, barge_in={vad.barge_in_min_duration_ms}ms")
+                        await send_json({
+                            "type": "config_updated",
+                            "silence_hangover_ms": vad.silence_hangover_ms,
+                            "barge_in_ms": vad.barge_in_min_duration_ms,
+                        })
 
                 except json.JSONDecodeError:
                     pass
