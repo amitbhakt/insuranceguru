@@ -232,6 +232,37 @@ async def load_sample_policy():
         "gist": gist
     }
 
+@app.post("/api/auth/validate-key")
+async def validate_api_key(request: Request):
+    """Validates a client-supplied Sarvam AI API key against the Sarvam API."""
+    try:
+        body = await request.json()
+        key = body.get("api_key", "").strip()
+        if not key:
+            return {"valid": False, "message": "API key cannot be empty."}
+
+        headers = {
+            "api-subscription-key": key,
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "inputs": ["test"],
+            "target_language_code": "en-IN",
+            "speaker": "shubh"
+        }
+        async with httpx.AsyncClient(timeout=8.0) as client:
+            res = await client.post("https://api.sarvam.ai/text-to-speech", json=payload, headers=headers)
+            if res.status_code in (200, 201):
+                return {"valid": True, "message": "Valid Sarvam AI API key."}
+            elif res.status_code in (401, 403):
+                return {"valid": False, "message": f"Authentication failed ({res.status_code} Forbidden). Please verify your key at sarvam.ai."}
+            elif res.status_code == 429:
+                return {"valid": True, "message": "Key is valid (currently rate-limited)."}
+            else:
+                return {"valid": False, "message": f"Sarvam API responded with HTTP {res.status_code}."}
+    except Exception as e:
+        return {"valid": False, "message": f"Validation check failed: {str(e)}"}
+
 @app.websocket("/ws/audio")
 async def websocket_audio_endpoint(websocket: WebSocket):
     await websocket.accept()
@@ -318,6 +349,22 @@ async def websocket_audio_endpoint(websocket: WebSocket):
     # Initialize STT and TTS connections
     await stt.connect()
     await tts.connect()
+
+    if not effective_api_key:
+        await send_json({
+            "type": "error",
+            "message": "No Sarvam AI API key configured. Please click the Settings icon and enter your key.",
+            "error_code": "MISSING_API_KEY"
+        })
+    elif not stt.is_connected:
+        is_auth = "403" in str(stt.last_error) or "401" in str(stt.last_error)
+        msg = "Invalid Sarvam AI API key (403 Forbidden). Please check your key in Voice Settings." if is_auth else f"STT connection failed: {stt.last_error or 'Network issue'}"
+        await send_json({
+            "type": "error",
+            "message": msg,
+            "error_code": "INVALID_API_KEY" if is_auth else "STT_CONNECT_FAILED"
+        })
+
     await turn_manager.set_state(AgentState.LISTENING)
 
     last_activity_time = time.time()
@@ -421,7 +468,18 @@ async def websocket_audio_endpoint(websocket: WebSocket):
                         if not effective_api_key:
                             await send_json({
                                 "type": "error",
-                                "message": "No Sarvam AI API key found. Please open the Voice Settings drawer (settings icon) and enter your Sarvam API key."
+                                "message": "No Sarvam AI API key found. Please open the Voice Settings drawer (settings icon) and enter your Sarvam API key.",
+                                "error_code": "MISSING_API_KEY"
+                            })
+                            continue
+
+                        if not stt.is_connected:
+                            is_auth = "403" in str(stt.last_error) or "401" in str(stt.last_error)
+                            msg = "Invalid Sarvam AI API key (403 Forbidden). Please check your key in Voice Settings." if is_auth else f"Sarvam STT failed: {stt.last_error or 'Connection failed'}"
+                            await send_json({
+                                "type": "error",
+                                "message": msg,
+                                "error_code": "INVALID_API_KEY" if is_auth else "STT_CONNECT_FAILED"
                             })
                             continue
 

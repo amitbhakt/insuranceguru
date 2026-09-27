@@ -21,10 +21,13 @@ class SarvamStreamingSTT(BaseSTT):
         self.ws: Optional[websockets.WebSocketClientProtocol] = None
         self.listen_task: Optional[asyncio.Task] = None
         self.is_connected = False
+        self.last_error: Optional[str] = None
 
     async def connect(self):
+        self.last_error = None
         if not self.api_key:
             logger.warning("No Sarvam API key provided. SarvamStreamingSTT running in degraded mode.")
+            self.last_error = "No API key provided."
             return
 
         headers = {
@@ -45,9 +48,11 @@ class SarvamStreamingSTT(BaseSTT):
                 ping_timeout=5
             )
             self.is_connected = True
+            self.last_error = None
             self.listen_task = asyncio.create_task(self._listen_loop())
             logger.info(f"Connected to Sarvam Saaras Realtime STT WebSocket ({url}).")
         except Exception as e:
+            self.last_error = str(e)
             logger.error(f"Failed to connect to Sarvam STT: {e}")
             self.is_connected = False
 

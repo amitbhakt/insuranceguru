@@ -228,19 +228,32 @@ function VoiceConsole() {
             )}
 
             {errorMessage && (
-              <div className="mt-3 flex items-center justify-between gap-3 rounded-2xl border border-destructive/40 bg-destructive/10 px-4 py-2 text-xs font-semibold text-destructive animate-in fade-in">
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-destructive/40 bg-destructive/10 px-4 py-2.5 text-xs font-semibold text-destructive animate-in fade-in">
                 <div className="flex items-center gap-2">
                   <AlertCircle className="size-4 shrink-0 text-destructive" />
                   <span>{errorMessage}</span>
                 </div>
-                <button
-                  type="button"
-                  onClick={clearError}
-                  className="rounded-full p-1 hover:bg-destructive/20 text-destructive"
-                  title="Dismiss error"
-                >
-                  <X className="size-3.5" />
-                </button>
+                <div className="flex items-center gap-2">
+                  {(errorMessage.toLowerCase().includes("api key") || errorMessage.includes("403") || errorMessage.includes("Settings") || errorMessage.toLowerCase().includes("sarvam")) && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 rounded-lg border-destructive/40 bg-destructive/15 text-[11px] font-bold text-destructive hover:bg-destructive/25"
+                      onClick={() => setShowSettings(true)}
+                    >
+                      <Settings2 className="size-3 mr-1" />
+                      Open Settings
+                    </Button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={clearError}
+                    className="rounded-full p-1 hover:bg-destructive/20 text-destructive"
+                    title="Dismiss error"
+                  >
+                    <X className="size-3.5" />
+                  </button>
+                </div>
               </div>
             )}
 
@@ -533,19 +546,32 @@ function VoiceConsole() {
           {showMetrics && <MetricsPanel metrics={metrics} turnCount={turnCount} duration={elapsedSeconds} />}
 
           {errorMessage && (
-            <div className="mt-4 flex items-center justify-between gap-3 rounded-2xl border border-destructive/40 bg-destructive/10 px-4 py-2.5 text-xs font-semibold text-destructive animate-in fade-in">
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-destructive/40 bg-destructive/10 px-4 py-2.5 text-xs font-semibold text-destructive animate-in fade-in">
               <div className="flex items-center gap-2">
                 <AlertCircle className="size-4 shrink-0 text-destructive" />
                 <span>{errorMessage}</span>
               </div>
-              <button
-                type="button"
-                onClick={clearError}
-                className="rounded-full p-1 hover:bg-destructive/20 text-destructive"
-                title="Dismiss error"
-              >
-                <X className="size-3.5" />
-              </button>
+              <div className="flex items-center gap-2">
+                {(errorMessage.toLowerCase().includes("api key") || errorMessage.includes("403") || errorMessage.includes("Settings") || errorMessage.toLowerCase().includes("sarvam")) && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 rounded-lg border-destructive/40 bg-destructive/15 text-[11px] font-bold text-destructive hover:bg-destructive/25"
+                    onClick={() => setShowSettings(true)}
+                  >
+                    <Settings2 className="size-3 mr-1" />
+                    Open Settings
+                  </Button>
+                )}
+                <button
+                  type="button"
+                  onClick={clearError}
+                  className="rounded-full p-1 hover:bg-destructive/20 text-destructive"
+                  title="Dismiss error"
+                >
+                  <X className="size-3.5" />
+                </button>
+              </div>
             </div>
           )}
 
@@ -803,20 +829,56 @@ function ApiKeySetting({
   const [inputValue, setInputValue] = useState(apiKey);
   const [showKey, setShowKey] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [isChecking, setIsChecking] = useState(false);
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   useEffect(() => {
     setInputValue(apiKey);
   }, [apiKey]);
 
-  const handleSave = () => {
-    setApiKey(inputValue);
-    setSavedSuccess(true);
-    setTimeout(() => setSavedSuccess(false), 2500);
+  const handleSave = async () => {
+    const trimmed = inputValue.trim();
+    if (!trimmed) {
+      setApiKey("");
+      setValidationError(null);
+      setSavedSuccess(false);
+      return;
+    }
+
+    setIsChecking(true);
+    setValidationError(null);
+
+    try {
+      const port = window.location.port !== "8000" ? "8000" : window.location.port;
+      const res = await fetch(`http://${window.location.hostname}:${port}/api/auth/validate-key`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ api_key: trimmed }),
+      });
+      const data = await res.json();
+      if (data.valid) {
+        setApiKey(trimmed);
+        setSavedSuccess(true);
+        setValidationError(null);
+        setTimeout(() => setSavedSuccess(false), 3000);
+      } else {
+        setValidationError(data.message || "Invalid Sarvam API key (403 Forbidden).");
+        setSavedSuccess(false);
+      }
+    } catch (err: unknown) {
+      // In case of network check failure, save key as requested
+      setApiKey(trimmed);
+      setSavedSuccess(true);
+      setTimeout(() => setSavedSuccess(false), 3000);
+    } finally {
+      setIsChecking(false);
+    }
   };
 
   const handleClear = () => {
     setInputValue("");
     setApiKey("");
+    setValidationError(null);
     setSavedSuccess(false);
   };
 
@@ -922,19 +984,30 @@ function ApiKeySetting({
           </button>
         </div>
 
+        {validationError && (
+          <div className="flex items-start gap-2 rounded-xl border border-destructive/40 bg-destructive/10 p-2.5 text-[11px] font-medium text-destructive animate-in fade-in">
+            <AlertCircle className="size-3.5 shrink-0 mt-0.5" />
+            <span>{validationError}</span>
+          </div>
+        )}
+
         <div className="flex items-center gap-2">
           <Button
             size="sm"
             className="h-8 rounded-lg bg-brand text-xs font-bold text-primary-foreground hover:bg-brand/90 flex-1"
             onClick={handleSave}
-            disabled={inputValue === apiKey && !savedSuccess}
+            disabled={isChecking || (inputValue === apiKey && !savedSuccess && !validationError)}
           >
-            {savedSuccess ? (
+            {isChecking ? (
+              <span className="flex items-center gap-1.5">
+                <Loader2 className="size-3.5 animate-spin" /> Verifying...
+              </span>
+            ) : savedSuccess ? (
               <span className="flex items-center gap-1.5 text-success-foreground">
-                <Check className="size-3.5" /> Saved!
+                <Check className="size-3.5" /> Saved & Verified!
               </span>
             ) : (
-              "Save Key"
+              "Verify & Save Key"
             )}
           </Button>
           {apiKey && (

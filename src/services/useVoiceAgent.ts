@@ -26,7 +26,29 @@ export function useVoiceAgent() {
 
   // Client-supplied Sarvam AI BYOK (Bring Your Own Key)
   const [apiKey, setApiKeyState] = useState<string>("");
+
+  // VAD Threshold states
+  const [silenceHangover, setSilenceHangoverState] = useState<number[]>([650]);
+  const [bargeSensitivity, setBargeSensitivityState] = useState<number[]>([300]);
+
+  // All Refs declared unconditionally at the top
   const apiKeyRef = useRef<string>("");
+  const silenceHangoverRef = useRef(650);
+  const bargeSensitivityRef = useRef(300);
+  const pendingQueryRef = useRef<string | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const workletNodeRef = useRef<AudioWorkletNode | null>(null);
+  const isMutedRef = useRef(false);
+  const activeSourcesRef = useRef<AudioBufferSourceNode[]>([]);
+  const nextStartTimeRef = useRef(0);
+  const audioQueueRef = useRef<ArrayBuffer[]>([]);
+  const isProcessingQueueRef = useRef(false);
+
+  useEffect(() => {
+    isMutedRef.current = muted;
+  }, [muted]);
 
   useEffect(() => {
     apiKeyRef.current = apiKey;
@@ -71,12 +93,6 @@ export function useVoiceAgent() {
     }
   }, []);
 
-  // VAD Threshold states & dynamic WebSocket push
-  const [silenceHangover, setSilenceHangoverState] = useState<number[]>([650]);
-  const [bargeSensitivity, setBargeSensitivityState] = useState<number[]>([300]);
-  const silenceHangoverRef = useRef(650);
-  const bargeSensitivityRef = useRef(300);
-
   const setSilenceHangover = useCallback((val: number[]) => {
     setSilenceHangoverState(val);
     const ms = val[0];
@@ -112,21 +128,6 @@ export function useVoiceAgent() {
       );
     }
   }, []);
-
-  const pendingQueryRef = useRef<string | null>(null);
-  const wsRef = useRef<WebSocket | null>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const mediaStreamRef = useRef<MediaStream | null>(null);
-  const workletNodeRef = useRef<AudioWorkletNode | null>(null);
-  const isMutedRef = useRef(false);
-  const activeSourcesRef = useRef<AudioBufferSourceNode[]>([]);
-  const nextStartTimeRef = useRef(0);
-  const audioQueueRef = useRef<ArrayBuffer[]>([]);
-  const isProcessingQueueRef = useRef(false);
-
-  useEffect(() => {
-    isMutedRef.current = muted;
-  }, [muted]);
 
   const fetchCurrentPolicy = useCallback(async (): Promise<PolicyInfo | null> => {
     try {
@@ -532,6 +533,26 @@ export function useVoiceAgent() {
               setIsWarmingUp(false);
               setPartialTranscript("");
               setErrorMessage(data.message || "An error occurred while processing the turn.");
+              if (
+                data.error_code === "INVALID_API_KEY" ||
+                data.error_code === "MISSING_API_KEY" ||
+                data.message?.toLowerCase().includes("api key")
+              ) {
+                stopAllAudio();
+                setStatus("error");
+                if (workletNodeRef.current) {
+                  workletNodeRef.current.disconnect();
+                  workletNodeRef.current = null;
+                }
+                if (mediaStreamRef.current) {
+                  mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+                  mediaStreamRef.current = null;
+                }
+                if (audioContextRef.current && audioContextRef.current.state !== "closed") {
+                  audioContextRef.current.close().catch(() => {});
+                  audioContextRef.current = null;
+                }
+              }
               break;
           }
         } catch (e) {
