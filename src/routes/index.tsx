@@ -8,11 +8,15 @@ import {
   Check,
   ChevronDown,
   Clock3,
+  ExternalLink,
+  Eye,
+  EyeOff,
   FileText,
   FileUp,
   Headphones,
   HeartPulse,
   Info,
+  KeyRound,
   Loader2,
   Mic,
   MicOff,
@@ -63,6 +67,8 @@ function VoiceConsole() {
     warmupMessage,
     activePolicy,
     errorMessage,
+    apiKey,
+    setApiKey,
     clearError,
     uploadPolicyPdf,
     resetPolicy,
@@ -644,6 +650,8 @@ function VoiceConsole() {
       <SettingsDrawer
         open={showSettings}
         onOpenChange={setShowSettings}
+        apiKey={apiKey}
+        setApiKey={setApiKey}
         silenceHangover={silenceHangover}
         setSilenceHangover={setSilenceHangover}
         bargeSensitivity={bargeSensitivity}
@@ -782,9 +790,129 @@ function MetricsPanel({ metrics, turnCount, duration }: { metrics: VoiceMetrics 
   );
 }
 
+function ApiKeySetting({
+  apiKey,
+  setApiKey,
+}: {
+  apiKey: string;
+  setApiKey: (key: string) => void;
+}) {
+  const [inputValue, setInputValue] = useState(apiKey);
+  const [showKey, setShowKey] = useState(false);
+  const [savedSuccess, setSavedSuccess] = useState(false);
+
+  useEffect(() => {
+    setInputValue(apiKey);
+  }, [apiKey]);
+
+  const handleSave = () => {
+    setApiKey(inputValue);
+    setSavedSuccess(true);
+    setTimeout(() => setSavedSuccess(false), 2500);
+  };
+
+  const handleClear = () => {
+    setInputValue("");
+    setApiKey("");
+    setSavedSuccess(false);
+  };
+
+  return (
+    <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <span className="grid size-7 place-items-center rounded-lg bg-brand/10 text-brand">
+            <KeyRound className="size-4" />
+          </span>
+          <div>
+            <Label htmlFor="sarvam-api-key" className="font-semibold text-sm text-foreground">
+              Sarvam AI API Key
+            </Label>
+            <p className="text-[11px] text-muted-foreground">Bring your own key (BYOK)</p>
+          </div>
+        </div>
+        {apiKey ? (
+          <span className="rounded-full bg-success/15 px-2 py-0.5 text-[10px] font-bold text-success flex items-center gap-1">
+            <Check className="size-3" /> Active
+          </span>
+        ) : (
+          <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+            Server default
+          </span>
+        )}
+      </div>
+
+      <div className="relative">
+        <Input
+          id="sarvam-api-key"
+          type={showKey ? "text" : "password"}
+          value={inputValue}
+          onChange={(e) => setInputValue(e.target.value)}
+          placeholder="Paste your Sarvam API Key..."
+          className="pr-10 text-xs font-mono h-9 rounded-xl border-border bg-background"
+        />
+        <button
+          type="button"
+          onClick={() => setShowKey(!showKey)}
+          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1"
+          aria-label={showKey ? "Hide API key" : "Show API key"}
+        >
+          {showKey ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+        </button>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <Button
+          size="sm"
+          className="h-8 rounded-lg bg-brand text-xs font-bold text-primary-foreground hover:bg-brand/90 flex-1"
+          onClick={handleSave}
+          disabled={inputValue === apiKey && !savedSuccess}
+        >
+          {savedSuccess ? (
+            <span className="flex items-center gap-1.5 text-success-foreground">
+              <Check className="size-3.5" /> Saved!
+            </span>
+          ) : (
+            "Save Key"
+          )}
+        </Button>
+        {apiKey && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 rounded-lg text-xs font-medium text-destructive hover:bg-destructive/10 hover:text-destructive border-border"
+            onClick={handleClear}
+          >
+            Clear
+          </Button>
+        )}
+      </div>
+
+      <div className="rounded-xl border border-border/60 bg-muted/40 p-2.5 text-[11px] leading-relaxed text-muted-foreground space-y-1.5">
+        <p className="flex items-center gap-1.5 font-medium text-foreground">
+          <ShieldCheck className="size-3.5 text-brand shrink-0" />
+          Client-Side Storage
+        </p>
+        <p>Stored securely in your browser&apos;s local storage. Never written to server disk or logs.</p>
+        <a
+          href="https://www.sarvam.ai/"
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1 font-semibold text-brand hover:underline pt-0.5"
+        >
+          Get a free API key at sarvam.ai
+          <ExternalLink className="size-3" />
+        </a>
+      </div>
+    </div>
+  );
+}
+
 function SettingsDrawer({
   open,
   onOpenChange,
+  apiKey,
+  setApiKey,
   silenceHangover,
   setSilenceHangover,
   bargeSensitivity,
@@ -794,6 +922,8 @@ function SettingsDrawer({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  apiKey: string;
+  setApiKey: (key: string) => void;
   silenceHangover: number[];
   setSilenceHangover: (value: number[]) => void;
   bargeSensitivity: number[];
@@ -807,9 +937,11 @@ function SettingsDrawer({
         <SheetHeader className="pr-9 text-left">
           <span className="mb-1 grid size-10 place-items-center rounded-xl bg-sunshine text-ink"><Settings2 className="size-5" /></span>
           <SheetTitle className="font-display text-2xl">Voice settings</SheetTitle>
-          <SheetDescription>Adjust how the local voice preview behaves.</SheetDescription>
+          <SheetDescription>Configure your Sarvam API key & pipeline thresholds.</SheetDescription>
         </SheetHeader>
-        <div className="mt-8 space-y-8">
+        <div className="mt-6 space-y-6">
+          <ApiKeySetting apiKey={apiKey} setApiKey={setApiKey} />
+
           <SliderSetting
             id="silence-hangover"
             label="Silence hangover"
@@ -832,7 +964,7 @@ function SettingsDrawer({
             step={25}
             suffix="ms"
           />
-          <div className="flex items-center justify-between gap-4 border-t border-border pt-5">
+          <div className="flex items-center justify-between gap-4 border-t border-border pt-4">
             <div className="flex items-start gap-3">
               <span className="mt-0.5 grid size-8 place-items-center rounded-lg bg-accent text-ink"><Volume2 className="size-4" /></span>
               <span><Label htmlFor="auto-speak" className="font-semibold">Speak responses aloud</Label><span className="mt-1 block text-xs text-muted-foreground">Use your browser’s speech voice</span></span>
@@ -840,11 +972,11 @@ function SettingsDrawer({
             <Switch id="auto-speak" checked={autoSpeak} onCheckedChange={setAutoSpeak} aria-label="Speak responses aloud" />
           </div>
           <div className="rounded-xl border border-border bg-muted/70 p-4">
-            <p className="flex items-center gap-2 text-sm font-bold"><Info className="size-4 text-brand" />Preview settings only</p>
-            <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">These controls show the intended voice experience. Changing them does not configure an external voice service.</p>
+            <p className="flex items-center gap-2 text-sm font-bold"><Info className="size-4 text-brand" />Live Pipeline Configuration</p>
+            <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">VAD sliders adjust endpointing silence and interruption sensitivity dynamically over the live WebSocket session.</p>
           </div>
         </div>
-        <div className="mt-auto flex gap-2 pt-8">
+        <div className="mt-auto flex gap-2 pt-6">
           <Button variant="outline" className="flex-1 rounded-full" onClick={() => { setSilenceHangover([650]); setBargeSensitivity([300]); setAutoSpeak(true); }}>Reset</Button>
           <Button className="flex-1 rounded-full bg-brand text-primary-foreground hover:bg-brand/90" onClick={() => onOpenChange(false)}>Done</Button>
         </div>

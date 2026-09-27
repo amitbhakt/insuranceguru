@@ -5,7 +5,7 @@ import time
 from pathlib import Path
 from typing import Optional
 import httpx
-from fastapi import FastAPI, File, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, File, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -99,8 +99,9 @@ async def health_check():
     }
 
 @app.post("/api/policy/upload")
-async def upload_policy(file: UploadFile = File(...)):
+async def upload_policy(request: Request, file: UploadFile = File(...)):
     """Uploads an insurance policy PDF or Markdown document to ground the agent."""
+    effective_api_key = request.headers.get("x-sarvam-api-key") or settings.SARVAM_API_KEY
     try:
         contents = await file.read()
         if file.filename.lower().endswith(".pdf"):
@@ -116,34 +117,35 @@ async def upload_policy(file: UploadFile = File(...)):
 
         # Dynamically extract structured highlight gist from the uploaded document using LLM
         gist = DEFAULT_GIST
-        try:
-            async with httpx.AsyncClient(timeout=12.0) as client:
-                prompt = (
-                    "Analyze this insurance policy text and extract 4 structured highlight sections "
-                    "as a JSON array of objects with keys \"title\", \"badge\", and \"items\" (list of 2-4 concise strings). "
-                    "Output ONLY valid JSON, nothing else.\n\nText:\n" + text[:4500]
-                )
-                res = await client.post(
-                    settings.SARVAM_LLM_URL,
-                    json={
-                        "model": settings.SARVAM_LLM_MODEL,
-                        "messages": [{"role": "user", "content": prompt}],
-                        "temperature": 0.1,
-                        "max_tokens": 500
-                    },
-                    headers={"api-subscription-key": settings.SARVAM_API_KEY, "Content-Type": "application/json"}
-                )
-                if res.status_code == 200:
-                    raw_content = res.json()["choices"][0]["message"]["content"].strip()
-                    if raw_content.startswith("```"):
-                        raw_content = raw_content.split("```")[1]
-                        if raw_content.startswith("json"):
-                            raw_content = raw_content[4:]
-                    parsed = json.loads(raw_content.strip())
-                    if isinstance(parsed, list) and len(parsed) > 0:
-                        gist = parsed
-        except Exception as ex:
-            logger.warning(f"Could not extract dynamic gist via LLM: {ex}")
+        if effective_api_key:
+            try:
+                async with httpx.AsyncClient(timeout=12.0) as client:
+                    prompt = (
+                        "Analyze this insurance policy text and extract 4 structured highlight sections "
+                        "as a JSON array of objects with keys \"title\", \"badge\", and \"items\" (list of 2-4 concise strings). "
+                        "Output ONLY valid JSON, nothing else.\n\nText:\n" + text[:4500]
+                    )
+                    res = await client.post(
+                        settings.SARVAM_LLM_URL,
+                        json={
+                            "model": settings.SARVAM_LLM_MODEL,
+                            "messages": [{"role": "user", "content": prompt}],
+                            "temperature": 0.1,
+                            "max_tokens": 500
+                        },
+                        headers={"api-subscription-key": effective_api_key, "Content-Type": "application/json"}
+                    )
+                    if res.status_code == 200:
+                        raw_content = res.json()["choices"][0]["message"]["content"].strip()
+                        if raw_content.startswith("```"):
+                            raw_content = raw_content.split("```")[1]
+                            if raw_content.startswith("json"):
+                                raw_content = raw_content[4:]
+                        parsed = json.loads(raw_content.strip())
+                        if isinstance(parsed, list) and len(parsed) > 0:
+                            gist = parsed
+            except Exception as ex:
+                logger.warning(f"Could not extract dynamic gist via LLM: {ex}")
 
         active_policy_document["gist"] = gist
         logger.info(f"Custom policy uploaded successfully: {file.filename} ({len(text)} chars)")
@@ -233,7 +235,9 @@ async def load_sample_policy():
 @app.websocket("/ws/audio")
 async def websocket_audio_endpoint(websocket: WebSocket):
     await websocket.accept()
-    logger.info("Client connected to /ws/audio")
+    query_api_key = websocket.query_params.get("api_key", "").strip() or None
+    effective_api_key = query_api_key or settings.SARVAM_API_KEY
+    logger.info(f"Client connected to /ws/audio (custom key: {bool(query_api_key)})")
 
     current_transcript = ""
 
@@ -276,14 +280,14 @@ async def websocket_audio_endpoint(websocket: WebSocket):
                     stt_duration_ms=stt_latency_ms,
                 )
 
-    stt = SarvamStreamingSTT(on_partial=on_stt_partial, on_final=on_stt_final)
-    tts = SarvamStreamingTTS()
+    stt = SarvamStreamingSTT(on_partial=on_stt_partial, on_final=on_stt_final, api_key=effective_api_key)
+    tts = SarvamStreamingTTS(api_key=effective_api_key)
     vad = VoiceActivityDetector()
 
     # Ground conversational agent on active policy document
     active_policy_text = active_policy_document["content"]
     system_prompt = get_system_prompt(active_policy_text)
-    agent = ConversationalAgent(system_prompt=system_prompt)
+    agent = ConversationalAgent(system_prompt=system_prompt, api_key=effective_api_key)
 
     async def send_json(data: dict):
         try:
@@ -404,6 +408,23 @@ async def websocket_audio_endpoint(websocket: WebSocket):
                         turn_manager.notify_playback_ended()
 
                     elif msg_type == "start_session":
+                        client_key = payload.get("api_key", "").strip() or None
+                        if client_key and client_key != effective_api_key:
+                            effective_api_key = client_key
+                            stt.api_key = effective_api_key
+                            tts.api_key = effective_api_key
+                            agent.api_key = effective_api_key
+                            await stt.close()
+                            await stt.connect()
+                            await tts.connect()
+
+                        if not effective_api_key:
+                            await send_json({
+                                "type": "error",
+                                "message": "No Sarvam AI API key found. Please open the Voice Settings drawer (settings icon) and enter your Sarvam API key."
+                            })
+                            continue
+
                         # Check if a custom policy text was passed in message
                         custom_policy_override = payload.get("custom_policy")
                         if custom_policy_override:

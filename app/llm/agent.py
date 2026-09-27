@@ -1,7 +1,7 @@
 import asyncio
 import json
 import logging
-from typing import AsyncGenerator, Dict, List
+from typing import AsyncGenerator, Dict, List, Optional
 import httpx
 from app.config import settings
 from app.prompts.agent_prompt import get_system_prompt
@@ -13,8 +13,9 @@ class ConversationalAgent:
     Manages grounded insurance conversation memory and streams token responses
     from the Sarvam LLM API (with full offline grounded fallback for CI/testing).
     """
-    def __init__(self, system_prompt: str = None):
+    def __init__(self, system_prompt: str = None, api_key: Optional[str] = None):
         self.system_prompt = system_prompt or get_system_prompt()
+        self.api_key = api_key or settings.SARVAM_API_KEY
         self.messages: List[Dict[str, str]] = [
             {"role": "system", "content": self.system_prompt}
         ]
@@ -36,16 +37,16 @@ class ConversationalAgent:
         if user_query:
             self.add_user_message(user_query)
 
-        if not settings.SARVAM_API_KEY:
-            logger.warning("SARVAM_API_KEY not set. Using local grounded fallback responses.")
+        if not self.api_key:
+            logger.warning("No Sarvam API key provided. Using local grounded fallback responses.")
             for word in self._local_grounded_fallback(self.messages[-1]["content"]).split(" "):
                 yield word + " "
                 await asyncio.sleep(0.01)
             return
 
         headers = {
-            "api-subscription-key": settings.SARVAM_API_KEY,
-            "Authorization": f"Bearer {settings.SARVAM_API_KEY}",
+            "api-subscription-key": self.api_key,
+            "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"
         }
         payload = {

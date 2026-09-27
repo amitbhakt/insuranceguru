@@ -24,6 +24,37 @@ export function useVoiceAgent() {
   const [activePolicy, setActivePolicy] = useState<PolicyInfo | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // Client-supplied Sarvam AI BYOK (Bring Your Own Key)
+  const [apiKey, setApiKeyState] = useState<string>("");
+  const apiKeyRef = useRef<string>("");
+
+  useEffect(() => {
+    apiKeyRef.current = apiKey;
+  }, [apiKey]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("sarvam_api_key");
+      if (stored) {
+        setApiKeyState(stored);
+        apiKeyRef.current = stored;
+      }
+    }
+  }, []);
+
+  const setApiKey = useCallback((newKey: string) => {
+    const trimmed = newKey.trim();
+    setApiKeyState(trimmed);
+    apiKeyRef.current = trimmed;
+    if (typeof window !== "undefined") {
+      if (trimmed) {
+        localStorage.setItem("sarvam_api_key", trimmed);
+      } else {
+        localStorage.removeItem("sarvam_api_key");
+      }
+    }
+  }, []);
+
   const pendingQueryRef = useRef<string | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -103,9 +134,15 @@ export function useVoiceAgent() {
       try {
         const formData = new FormData();
         formData.append("file", file);
+        const currentKey = apiKeyRef.current;
+        const headers: Record<string, string> = {};
+        if (currentKey) {
+          headers["x-sarvam-api-key"] = currentKey;
+        }
         const port = window.location.port !== "8000" ? "8000" : window.location.port;
         const res = await fetch(`http://${window.location.hostname}:${port}/api/policy/upload`, {
           method: "POST",
+          headers: Object.keys(headers).length > 0 ? headers : undefined,
           body: formData,
         });
         const data = await res.json();
@@ -252,7 +289,9 @@ export function useVoiceAgent() {
         window.location.port !== "8000"
           ? `${window.location.hostname}:8000`
           : window.location.host;
-      const wsUrl = `${protocol}//${host}/ws/audio`;
+      const currentKey = apiKeyRef.current;
+      const queryParams = currentKey ? `?api_key=${encodeURIComponent(currentKey)}` : "";
+      const wsUrl = `${protocol}//${host}/ws/audio${queryParams}`;
 
       const ws = new WebSocket(wsUrl);
       ws.binaryType = "arraybuffer";
@@ -276,7 +315,10 @@ export function useVoiceAgent() {
         setWarmupMessage("Connecting to Sarvam AI & indexing policy...");
         const initialQuery = pendingQueryRef.current;
         pendingQueryRef.current = null;
-        const payload: Record<string, unknown> = { type: "start_session" };
+        const payload: Record<string, unknown> = {
+          type: "start_session",
+          ...(currentKey ? { api_key: currentKey } : {}),
+        };
         if (initialQuery) {
           payload.initial_query = initialQuery;
           setMessages((prev) => [
@@ -559,6 +601,8 @@ export function useVoiceAgent() {
     warmupMessage,
     activePolicy,
     errorMessage,
+    apiKey,
+    setApiKey,
     clearError,
     fetchCurrentPolicy,
     uploadPolicyPdf,

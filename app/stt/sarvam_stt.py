@@ -12,21 +12,23 @@ class SarvamStreamingSTT(BaseSTT):
     def __init__(
         self,
         on_partial: Optional[Callable[[str], None]] = None,
-        on_final: Optional[Callable[[str], None]] = None
+        on_final: Optional[Callable[[str], None]] = None,
+        api_key: Optional[str] = None,
     ):
         self.on_partial = on_partial
         self.on_final = on_final
+        self.api_key = api_key or settings.SARVAM_API_KEY
         self.ws: Optional[websockets.WebSocketClientProtocol] = None
         self.listen_task: Optional[asyncio.Task] = None
         self.is_connected = False
 
     async def connect(self):
-        if not settings.SARVAM_API_KEY:
-            logger.warning("SARVAM_API_KEY not set. SarvamStreamingSTT running in degraded mode.")
+        if not self.api_key:
+            logger.warning("No Sarvam API key provided. SarvamStreamingSTT running in degraded mode.")
             return
 
         headers = {
-            "api-subscription-key": settings.SARVAM_API_KEY
+            "api-subscription-key": self.api_key
         }
         url = (
             f"{settings.SARVAM_STT_WS_URL}?"

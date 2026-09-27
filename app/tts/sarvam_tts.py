@@ -11,13 +11,14 @@ from app.tts.base import BaseTTS
 logger = logging.getLogger(__name__)
 
 class SarvamStreamingTTS(BaseTTS):
-    def __init__(self):
+    def __init__(self, api_key: Optional[str] = None):
+        self.api_key = api_key or settings.SARVAM_API_KEY
         self.client: Optional[httpx.AsyncClient] = None
         self.is_connected = False
 
     async def connect(self):
-        if not settings.SARVAM_API_KEY:
-            logger.warning("SARVAM_API_KEY not set. SarvamStreamingTTS in offline mode.")
+        if not self.api_key:
+            logger.warning("No Sarvam API key provided. SarvamStreamingTTS in offline mode.")
             return
 
         # Initialize persistent connection pool with HTTP keep-alive
@@ -33,8 +34,8 @@ class SarvamStreamingTTS(BaseTTS):
         if not text:
             return
 
-        if not settings.SARVAM_API_KEY:
-            logger.warning("No SARVAM_API_KEY available for TTS synthesis.")
+        if not self.api_key:
+            logger.warning("No Sarvam API key available for TTS synthesis.")
             return
 
         if not self.client or self.client.is_closed:
@@ -50,7 +51,7 @@ class SarvamStreamingTTS(BaseTTS):
 
         url = "https://api.sarvam.ai/text-to-speech"
         headers = {
-            "api-subscription-key": settings.SARVAM_API_KEY,
+            "api-subscription-key": self.api_key,
             "Content-Type": "application/json"
         }
         payload = {
