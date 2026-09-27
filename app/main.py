@@ -254,6 +254,8 @@ async def validate_api_key(request: Request):
             res = await client.post("https://api.sarvam.ai/text-to-speech", json=payload, headers=headers)
             if res.status_code in (200, 201):
                 return {"valid": True, "message": "Valid Sarvam AI API key."}
+            elif res.status_code == 402:
+                return {"valid": False, "message": "Sarvam AI credits exhausted (402 Payment Required). Please top up credits or use another key at sarvam.ai."}
             elif res.status_code in (401, 403):
                 return {"valid": False, "message": f"Authentication failed ({res.status_code} Forbidden). Please verify your key at sarvam.ai."}
             elif res.status_code == 429:
@@ -311,15 +313,6 @@ async def websocket_audio_endpoint(websocket: WebSocket):
                     stt_duration_ms=stt_latency_ms,
                 )
 
-    stt = SarvamStreamingSTT(on_partial=on_stt_partial, on_final=on_stt_final, api_key=effective_api_key)
-    tts = SarvamStreamingTTS(api_key=effective_api_key)
-    vad = VoiceActivityDetector()
-
-    # Ground conversational agent on active policy document
-    active_policy_text = active_policy_document["content"]
-    system_prompt = get_system_prompt(active_policy_text)
-    agent = ConversationalAgent(system_prompt=system_prompt, api_key=effective_api_key)
-
     async def send_json(data: dict):
         try:
             await websocket.send_text(json.dumps(data))
@@ -337,6 +330,36 @@ async def websocket_audio_endpoint(websocket: WebSocket):
             await websocket.close(code=1000)
         except Exception:
             pass
+
+    async def on_stt_error(err_str: str):
+        logger.error(f"STT Error callback triggered: {err_str}")
+        is_quota = "credits" in err_str.lower() or "1003" in err_str or "402" in err_str
+        is_auth = "403" in err_str or "401" in err_str
+        code = "CREDITS_EXHAUSTED" if is_quota else ("INVALID_API_KEY" if is_auth else "STT_ERROR")
+        msg = (
+            "Sarvam AI credits exhausted (1003 / 402 Payment Required). Please top up credits or update your key in Voice Settings."
+            if is_quota
+            else ("Invalid Sarvam AI API key (403 Forbidden). Please check your key in Voice Settings." if is_auth else f"STT error: {err_str}")
+        )
+        await send_json({
+            "type": "error",
+            "message": msg,
+            "error_code": code
+        })
+
+    stt = SarvamStreamingSTT(
+        on_partial=on_stt_partial,
+        on_final=on_stt_final,
+        on_error=on_stt_error,
+        api_key=effective_api_key
+    )
+    tts = SarvamStreamingTTS(api_key=effective_api_key)
+    vad = VoiceActivityDetector()
+
+    # Ground conversational agent on active policy document
+    active_policy_text = active_policy_document["content"]
+    system_prompt = get_system_prompt(active_policy_text)
+    agent = ConversationalAgent(system_prompt=system_prompt, api_key=effective_api_key)
 
     turn_manager = TurnManager(
         send_json=send_json,
@@ -357,12 +380,19 @@ async def websocket_audio_endpoint(websocket: WebSocket):
             "error_code": "MISSING_API_KEY"
         })
     elif not stt.is_connected:
-        is_auth = "403" in str(stt.last_error) or "401" in str(stt.last_error)
-        msg = "Invalid Sarvam AI API key (403 Forbidden). Please check your key in Voice Settings." if is_auth else f"STT connection failed: {stt.last_error or 'Network issue'}"
+        err_str = str(stt.last_error or "")
+        is_quota = "credits" in err_str.lower() or "1003" in err_str or "402" in err_str
+        is_auth = "403" in err_str or "401" in err_str
+        code = "CREDITS_EXHAUSTED" if is_quota else ("INVALID_API_KEY" if is_auth else "STT_CONNECT_FAILED")
+        msg = (
+            "Sarvam AI credits exhausted (1003 / 402 Payment Required). Please top up credits or update your key in Voice Settings."
+            if is_quota
+            else ("Invalid Sarvam AI API key (403 Forbidden). Please check your key in Voice Settings." if is_auth else f"STT connection failed: {stt.last_error or 'Network issue'}")
+        )
         await send_json({
             "type": "error",
             "message": msg,
-            "error_code": "INVALID_API_KEY" if is_auth else "STT_CONNECT_FAILED"
+            "error_code": code
         })
 
     await turn_manager.set_state(AgentState.LISTENING)
@@ -474,12 +504,19 @@ async def websocket_audio_endpoint(websocket: WebSocket):
                             continue
 
                         if not stt.is_connected:
-                            is_auth = "403" in str(stt.last_error) or "401" in str(stt.last_error)
-                            msg = "Invalid Sarvam AI API key (403 Forbidden). Please check your key in Voice Settings." if is_auth else f"Sarvam STT failed: {stt.last_error or 'Connection failed'}"
+                            err_str = str(stt.last_error or "")
+                            is_quota = "credits" in err_str.lower() or "1003" in err_str or "402" in err_str
+                            is_auth = "403" in err_str or "401" in err_str
+                            code = "CREDITS_EXHAUSTED" if is_quota else ("INVALID_API_KEY" if is_auth else "STT_CONNECT_FAILED")
+                            msg = (
+                                "Sarvam AI credits exhausted (1003 / 402 Payment Required). Please top up credits or update your key in Voice Settings."
+                                if is_quota
+                                else ("Invalid Sarvam AI API key (403 Forbidden). Please check your key in Voice Settings." if is_auth else f"Sarvam STT failed: {stt.last_error or 'Connection failed'}")
+                            )
                             await send_json({
                                 "type": "error",
                                 "message": msg,
-                                "error_code": "INVALID_API_KEY" if is_auth else "STT_CONNECT_FAILED"
+                                "error_code": code
                             })
                             continue
 

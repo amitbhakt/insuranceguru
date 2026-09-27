@@ -234,7 +234,7 @@ function VoiceConsole() {
                   <span>{errorMessage}</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  {(errorMessage.toLowerCase().includes("api key") || errorMessage.includes("403") || errorMessage.includes("Settings") || errorMessage.toLowerCase().includes("sarvam")) && (
+                  {(errorMessage.toLowerCase().includes("api key") || errorMessage.includes("403") || errorMessage.includes("402") || errorMessage.toLowerCase().includes("credit") || errorMessage.includes("Settings") || errorMessage.toLowerCase().includes("sarvam")) && (
                     <Button
                       size="sm"
                       variant="outline"
@@ -552,7 +552,7 @@ function VoiceConsole() {
                 <span>{errorMessage}</span>
               </div>
               <div className="flex items-center gap-2">
-                {(errorMessage.toLowerCase().includes("api key") || errorMessage.includes("403") || errorMessage.includes("Settings") || errorMessage.toLowerCase().includes("sarvam")) && (
+                {(errorMessage.toLowerCase().includes("api key") || errorMessage.includes("403") || errorMessage.includes("402") || errorMessage.toLowerCase().includes("credit") || errorMessage.includes("Settings") || errorMessage.toLowerCase().includes("sarvam")) && (
                   <Button
                     size="sm"
                     variant="outline"

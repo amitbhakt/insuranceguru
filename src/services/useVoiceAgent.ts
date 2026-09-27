@@ -536,7 +536,9 @@ export function useVoiceAgent() {
               if (
                 data.error_code === "INVALID_API_KEY" ||
                 data.error_code === "MISSING_API_KEY" ||
-                data.message?.toLowerCase().includes("api key")
+                data.error_code === "CREDITS_EXHAUSTED" ||
+                data.message?.toLowerCase().includes("api key") ||
+                data.message?.toLowerCase().includes("credits")
               ) {
                 stopAllAudio();
                 setStatus("error");
@@ -569,7 +571,7 @@ export function useVoiceAgent() {
       };
 
       ws.onclose = () => {
-        setStatus("disconnected");
+        setStatus((prev) => (prev === "error" ? "error" : "disconnected"));
         setAgentState("idle");
         setIsWarmingUp(false);
         setPartialTranscript("");

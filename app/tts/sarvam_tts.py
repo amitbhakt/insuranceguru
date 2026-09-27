@@ -74,10 +74,21 @@ class SarvamStreamingTTS(BaseTTS):
                 for audio_b64 in audios:
                     if audio_b64:
                         yield base64.b64decode(audio_b64)
+            elif response.status_code == 402:
+                err_msg = "Sarvam AI credits exhausted (402 Payment Required). Please top up credits or use another key in Voice Settings."
+                logger.error(f"Sarvam TTS error 402: {response.text}")
+                raise RuntimeError(err_msg)
+            elif response.status_code in (401, 403):
+                err_msg = f"Sarvam AI authentication failed ({response.status_code} Forbidden). Please verify your API key in Voice Settings."
+                logger.error(f"Sarvam TTS auth error {response.status_code}: {response.text}")
+                raise RuntimeError(err_msg)
             else:
-                logger.error(f"Sarvam TTS error {response.status_code}: {response.text}")
+                err_msg = f"Sarvam TTS error {response.status_code}: {response.text}"
+                logger.error(err_msg)
+                raise RuntimeError(err_msg)
         except Exception as e:
             logger.error(f"Exception during Sarvam TTS synthesis: {e}")
+            raise
 
     async def close(self):
         self.is_connected = False

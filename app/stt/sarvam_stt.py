@@ -13,10 +13,12 @@ class SarvamStreamingSTT(BaseSTT):
         self,
         on_partial: Optional[Callable[[str], None]] = None,
         on_final: Optional[Callable[[str], None]] = None,
+        on_error: Optional[Callable[[str], None]] = None,
         api_key: Optional[str] = None,
     ):
         self.on_partial = on_partial
         self.on_final = on_final
+        self.on_error = on_error
         self.api_key = api_key or settings.SARVAM_API_KEY
         self.ws: Optional[websockets.WebSocketClientProtocol] = None
         self.listen_task: Optional[asyncio.Task] = None
@@ -55,6 +57,16 @@ class SarvamStreamingSTT(BaseSTT):
             self.last_error = str(e)
             logger.error(f"Failed to connect to Sarvam STT: {e}")
             self.is_connected = False
+            if self.on_error:
+                try:
+                    if asyncio.iscoroutinefunction(self.on_error):
+                        await self.on_error(str(e))
+                    else:
+                        res = self.on_error(str(e))
+                        if asyncio.iscoroutine(res):
+                            await res
+                except Exception:
+                    pass
 
     async def _listen_loop(self):
         try:
@@ -100,7 +112,18 @@ class SarvamStreamingSTT(BaseSTT):
         except asyncio.CancelledError:
             pass
         except Exception as e:
+            self.last_error = str(e)
             logger.error(f"Error in Sarvam STT listen loop: {e}")
+            if self.on_error:
+                try:
+                    if asyncio.iscoroutinefunction(self.on_error):
+                        await self.on_error(str(e))
+                    else:
+                        res = self.on_error(str(e))
+                        if asyncio.iscoroutine(res):
+                            await res
+                except Exception:
+                    pass
         finally:
             self.is_connected = False
 
@@ -110,7 +133,19 @@ class SarvamStreamingSTT(BaseSTT):
                 # Send raw binary PCM audio frame
                 await self.ws.send(pcm_bytes)
             except Exception as e:
+                self.last_error = str(e)
                 logger.error(f"Error sending audio to Sarvam STT: {e}")
+                self.is_connected = False
+                if self.on_error:
+                    try:
+                        if asyncio.iscoroutinefunction(self.on_error):
+                            await self.on_error(str(e))
+                        else:
+                            res = self.on_error(str(e))
+                            if asyncio.iscoroutine(res):
+                                await res
+                    except Exception:
+                        pass
 
     async def close(self):
         self.is_connected = False

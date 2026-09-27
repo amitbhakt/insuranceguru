@@ -144,6 +144,15 @@ class TurnManager:
             logger.info("Greeting playback cancelled via barge-in.")
         except Exception as e:
             logger.error(f"Error streaming greeting: {e}")
+            err_str = str(e)
+            is_quota = "credits" in err_str.lower() or "402" in err_str
+            is_auth = "403" in err_str or "401" in err_str
+            code = "CREDITS_EXHAUSTED" if is_quota else ("INVALID_API_KEY" if is_auth else "TTS_ERROR")
+            await self.send_json({
+                "type": "error",
+                "message": err_str if (is_quota or is_auth) else f"Greeting playback failed: {err_str}",
+                "error_code": code
+            })
             await self.set_state(AgentState.LISTENING)
 
     async def _process_turn(self, user_transcript: str, vad_duration_ms: int, stt_duration_ms: int = 0):
@@ -248,7 +257,15 @@ class TurnManager:
             logger.info("Active turn task cancelled via barge-in.")
         except Exception as e:
             logger.error(f"Error processing turn: {e}", exc_info=True)
-            await self.send_json({"type": "error", "message": "Failed to process turn."})
+            err_str = str(e)
+            is_quota = "credits" in err_str.lower() or "402" in err_str
+            is_auth = "403" in err_str or "401" in err_str
+            code = "CREDITS_EXHAUSTED" if is_quota else ("INVALID_API_KEY" if is_auth else "TURN_ERROR")
+            await self.send_json({
+                "type": "error",
+                "message": err_str if (is_quota or is_auth) else f"Failed to process turn: {err_str}",
+                "error_code": code
+            })
             await self.set_state(AgentState.LISTENING)
         finally:
             if producer_task and not producer_task.done():
