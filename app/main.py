@@ -182,8 +182,9 @@ async def reset_policy():
     return {"status": "reset", "filename": active_policy_document["filename"]}
 
 @app.post("/api/policy/sample")
-async def load_sample_policy():
+async def load_sample_policy(request: Request):
     """Loads the sample Star Comprehensive Health Plan PDF as an active custom document."""
+    effective_api_key = request.headers.get("x-sarvam-api-key") or settings.SARVAM_API_KEY
     sample_path = Path(__file__).resolve().parent / "data" / "Star_Comprehensive_Health_Plan.pdf"
     if not sample_path.exists():
         return {"status": "error", "message": "Sample PDF not found."}
@@ -195,23 +196,24 @@ async def load_sample_policy():
 
     # Extract gist via LLM
     gist = DEFAULT_GIST
-    try:
-        async with httpx.AsyncClient(timeout=12.0) as client:
-            prompt = (
-                "Analyze this insurance policy text and extract 4 structured highlight sections "
-                "as a JSON array of objects with keys \"title\", \"badge\", and \"items\" (list of 2-4 concise strings). "
-                "Output ONLY valid JSON, nothing else.\n\nText:\n" + text[:4500]
-            )
-            res = await client.post(
-                settings.SARVAM_LLM_URL,
-                json={
-                    "model": settings.SARVAM_LLM_MODEL,
-                    "messages": [{"role": "user", "content": prompt}],
-                    "temperature": 0.1,
-                    "max_tokens": 500
-                },
-                headers={"api-subscription-key": settings.SARVAM_API_KEY, "Content-Type": "application/json"}
-            )
+    if effective_api_key:
+        try:
+            async with httpx.AsyncClient(timeout=12.0) as client:
+                prompt = (
+                    "Analyze this insurance policy text and extract 4 structured highlight sections "
+                    "as a JSON array of objects with keys \"title\", \"badge\", and \"items\" (list of 2-4 concise strings). "
+                    "Output ONLY valid JSON, nothing else.\n\nText:\n" + text[:4500]
+                )
+                res = await client.post(
+                    settings.SARVAM_LLM_URL,
+                    json={
+                        "model": settings.SARVAM_LLM_MODEL,
+                        "messages": [{"role": "user", "content": prompt}],
+                        "temperature": 0.1,
+                        "max_tokens": 500
+                    },
+                    headers={"api-subscription-key": effective_api_key, "Content-Type": "application/json"}
+                )
             if res.status_code == 200:
                 raw_content = res.json()["choices"][0]["message"]["content"].strip()
                 if raw_content.startswith("```"):

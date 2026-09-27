@@ -169,8 +169,14 @@ export function useVoiceAgent() {
     setPartialTranscript("");
     try {
       const port = window.location.port !== "8000" ? "8000" : window.location.port;
+      const currentKey = apiKeyRef.current;
+      const headers: Record<string, string> = {};
+      if (currentKey) {
+        headers["x-sarvam-api-key"] = currentKey;
+      }
       const res = await fetch(`http://${window.location.hostname}:${port}/api/policy/sample`, {
         method: "POST",
+        headers: Object.keys(headers).length > 0 ? headers : undefined,
       });
       const data = await res.json();
       if (data.status === "success") {
