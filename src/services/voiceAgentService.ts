@@ -17,26 +17,21 @@ export type VoiceMetrics = {
   ttsMs: number;
 };
 
-export const openingMessages: VoiceMessage[] = [
-  {
-    id: "welcome",
-    role: "agent",
-    text: "Hello, welcome to Arogya Shield. I can help you explore health cover or answer a question about a policy.",
-    timestamp: new Date(Date.now() - 180000),
-  },
-  {
-    id: "sample-question",
-    role: "user",
-    text: "What is covered under a family health plan?",
-    timestamp: new Date(Date.now() - 115000),
-  },
-  {
-    id: "sample-answer",
-    role: "agent",
-    text: "A family plan can cover eligible hospitalisation expenses for everyone listed. Benefits, limits and waiting periods depend on the specific policy schedule.",
-    timestamp: new Date(Date.now() - 90000),
-  },
-];
+export type PolicyGistSection = {
+  title: string;
+  badge: string;
+  items: string[];
+};
+
+export type PolicyInfo = {
+  filename: string;
+  is_custom: boolean;
+  char_count: number;
+  content: string;
+  gist?: PolicyGistSection[];
+};
+
+export const openingMessages: VoiceMessage[] = [];
 
 const policyAnswers: Array<{ includes: string[]; answer: string }> = [
   {
@@ -76,5 +71,7 @@ export function createPolicyAnswer(question: string): string {
 }
 
 export function formatMessageTime(timestamp: Date): string {
-  return timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const hours = String(timestamp.getHours()).padStart(2, "0");
+  const minutes = String(timestamp.getMinutes()).padStart(2, "0");
+  return `${hours}:${minutes}`;
 }
