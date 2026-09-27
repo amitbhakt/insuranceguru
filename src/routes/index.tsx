@@ -818,91 +818,150 @@ function ApiKeySetting({
   };
 
   return (
-    <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <span className="grid size-7 place-items-center rounded-lg bg-brand/10 text-brand">
-            <KeyRound className="size-4" />
-          </span>
-          <div>
-            <Label htmlFor="sarvam-api-key" className="font-semibold text-sm text-foreground">
-              Sarvam AI API Key
-            </Label>
-            <p className="text-[11px] text-muted-foreground">Bring your own key (BYOK)</p>
+    <div className="rounded-2xl border border-border bg-card p-4 space-y-4">
+      {/* Pluggable Provider Selection */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+            Pipeline Provider
+          </Label>
+          <span className="text-[10px] font-medium text-brand">Pluggable Engine</span>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          {/* Active: Sarvam AI */}
+          <div className="flex flex-col justify-between rounded-xl border-2 border-brand/60 bg-brand/5 p-2.5 shadow-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-foreground">Sarvam AI</span>
+              <span className="flex items-center gap-1 rounded-full bg-brand/20 px-1.5 py-0.5 text-[9px] font-bold text-brand">
+                <span className="size-1.5 rounded-full bg-brand animate-pulse" />
+                Active
+              </span>
+            </div>
+            <p className="mt-1 text-[10px] text-muted-foreground">Indic STT, LLM & TTS</p>
+          </div>
+
+          {/* Coming Soon: Deepgram */}
+          <div className="flex flex-col justify-between rounded-xl border border-dashed border-border/80 bg-muted/30 p-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-muted-foreground">Deepgram</span>
+              <span className="rounded-full bg-accent px-1.5 py-0.5 text-[9px] font-semibold text-muted-foreground">
+                Soon
+              </span>
+            </div>
+            <p className="mt-1 text-[10px] text-muted-foreground/80">Nova-3 Streaming STT</p>
+          </div>
+
+          {/* Coming Soon: ElevenLabs */}
+          <div className="flex flex-col justify-between rounded-xl border border-dashed border-border/80 bg-muted/30 p-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-muted-foreground">ElevenLabs</span>
+              <span className="rounded-full bg-accent px-1.5 py-0.5 text-[9px] font-semibold text-muted-foreground">
+                Soon
+              </span>
+            </div>
+            <p className="mt-1 text-[10px] text-muted-foreground/80">Flash Voice TTS</p>
+          </div>
+
+          {/* Coming Soon: OpenRouter */}
+          <div className="flex flex-col justify-between rounded-xl border border-dashed border-border/80 bg-muted/30 p-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-muted-foreground">OpenRouter</span>
+              <span className="rounded-full bg-accent px-1.5 py-0.5 text-[9px] font-semibold text-muted-foreground">
+                Soon
+              </span>
+            </div>
+            <p className="mt-1 text-[10px] text-muted-foreground/80">Claude / GPT-4o / Llama</p>
           </div>
         </div>
-        {apiKey ? (
-          <span className="rounded-full bg-success/15 px-2 py-0.5 text-[10px] font-bold text-success flex items-center gap-1">
-            <Check className="size-3" /> Active
-          </span>
-        ) : (
-          <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-            Server default
-          </span>
-        )}
       </div>
 
-      <div className="relative">
-        <Input
-          id="sarvam-api-key"
-          type={showKey ? "text" : "password"}
-          value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
-          placeholder="Paste your Sarvam API Key..."
-          className="pr-10 text-xs font-mono h-9 rounded-xl border-border bg-background"
-        />
-        <button
-          type="button"
-          onClick={() => setShowKey(!showKey)}
-          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1"
-          aria-label={showKey ? "Hide API key" : "Show API key"}
-        >
-          {showKey ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
-        </button>
-      </div>
-
-      <div className="flex items-center gap-2">
-        <Button
-          size="sm"
-          className="h-8 rounded-lg bg-brand text-xs font-bold text-primary-foreground hover:bg-brand/90 flex-1"
-          onClick={handleSave}
-          disabled={inputValue === apiKey && !savedSuccess}
-        >
-          {savedSuccess ? (
-            <span className="flex items-center gap-1.5 text-success-foreground">
-              <Check className="size-3.5" /> Saved!
+      <div className="border-t border-border/60 pt-3 space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className="grid size-7 place-items-center rounded-lg bg-brand/10 text-brand">
+              <KeyRound className="size-4" />
+            </span>
+            <div>
+              <Label htmlFor="sarvam-api-key" className="font-semibold text-xs text-foreground">
+                Sarvam AI API Key
+              </Label>
+              <p className="text-[10px] text-muted-foreground">Bring your own key (BYOK)</p>
+            </div>
+          </div>
+          {apiKey ? (
+            <span className="rounded-full bg-success/15 px-2 py-0.5 text-[10px] font-bold text-success flex items-center gap-1">
+              <Check className="size-3" /> Active
             </span>
           ) : (
-            "Save Key"
+            <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+              Server default
+            </span>
           )}
-        </Button>
-        {apiKey && (
+        </div>
+
+        <div className="relative">
+          <Input
+            id="sarvam-api-key"
+            type={showKey ? "text" : "password"}
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            placeholder="Paste your Sarvam API Key..."
+            className="pr-10 text-xs font-mono h-9 rounded-xl border-border bg-background"
+          />
+          <button
+            type="button"
+            onClick={() => setShowKey(!showKey)}
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1"
+            aria-label={showKey ? "Hide API key" : "Show API key"}
+          >
+            {showKey ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+          </button>
+        </div>
+
+        <div className="flex items-center gap-2">
           <Button
             size="sm"
-            variant="outline"
-            className="h-8 rounded-lg text-xs font-medium text-destructive hover:bg-destructive/10 hover:text-destructive border-border"
-            onClick={handleClear}
+            className="h-8 rounded-lg bg-brand text-xs font-bold text-primary-foreground hover:bg-brand/90 flex-1"
+            onClick={handleSave}
+            disabled={inputValue === apiKey && !savedSuccess}
           >
-            Clear
+            {savedSuccess ? (
+              <span className="flex items-center gap-1.5 text-success-foreground">
+                <Check className="size-3.5" /> Saved!
+              </span>
+            ) : (
+              "Save Key"
+            )}
           </Button>
-        )}
-      </div>
+          {apiKey && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 rounded-lg text-xs font-medium text-destructive hover:bg-destructive/10 hover:text-destructive border-border"
+              onClick={handleClear}
+            >
+              Clear
+            </Button>
+          )}
+        </div>
 
-      <div className="rounded-xl border border-border/60 bg-muted/40 p-2.5 text-[11px] leading-relaxed text-muted-foreground space-y-1.5">
-        <p className="flex items-center gap-1.5 font-medium text-foreground">
-          <ShieldCheck className="size-3.5 text-brand shrink-0" />
-          Client-Side Storage
-        </p>
-        <p>Stored securely in your browser&apos;s local storage. Never written to server disk or logs.</p>
-        <a
-          href="https://www.sarvam.ai/"
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex items-center gap-1 font-semibold text-brand hover:underline pt-0.5"
-        >
-          Get a free API key at sarvam.ai
-          <ExternalLink className="size-3" />
-        </a>
+        <div className="rounded-xl border border-border/60 bg-muted/40 p-2.5 text-[11px] leading-relaxed text-muted-foreground space-y-1.5">
+          <p className="flex items-center gap-1.5 font-medium text-foreground">
+            <ShieldCheck className="size-3.5 text-brand shrink-0" />
+            Client-Side Storage
+          </p>
+          <p>Stored securely in your browser&apos;s local storage. Never written to server disk or logs.</p>
+          <a
+            href="https://www.sarvam.ai/"
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 font-semibold text-brand hover:underline pt-0.5"
+          >
+            Get a free API key at sarvam.ai
+            <ExternalLink className="size-3" />
+          </a>
+        </div>
       </div>
     </div>
   );
