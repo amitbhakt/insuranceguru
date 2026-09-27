@@ -8,3 +8,5 @@
 > Commits you push to the connected branch sync back to Lovable and show up in
 > the editor, so keep the branch in a working state.
 <!-- LOVABLE:END -->
+
+- Keep browser voice simulation and policy-answer examples in `src/services/`; this demo has no live voice-service connection.
