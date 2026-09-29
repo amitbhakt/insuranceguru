@@ -441,13 +441,13 @@ export function useVoiceAgent() {
                 const cleanText = data.text.trim();
                 setMessages((prev) => {
                   const last = prev[prev.length - 1];
-                  if (
-                    last &&
-                    last.role === "user" &&
-                    last.text.trim().toLowerCase() === cleanText.toLowerCase()
-                  ) {
-                    return prev;
+                  if (last && last.role === "user") {
+                    return [
+                      ...prev.slice(0, -1),
+                      { ...last, text: cleanText },
+                    ];
                   }
+                  setTurnCount((c) => c + 1);
                   return [
                     ...prev,
                     {
@@ -458,7 +458,6 @@ export function useVoiceAgent() {
                     },
                   ];
                 });
-                setTurnCount((c) => c + 1);
               }
               break;
 

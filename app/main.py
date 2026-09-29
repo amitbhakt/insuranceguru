@@ -223,8 +223,8 @@ async def load_sample_policy(request: Request):
                 parsed = json.loads(raw_content.strip())
                 if isinstance(parsed, list) and len(parsed) > 0:
                     gist = parsed
-    except Exception as ex:
-        logger.warning(f"Could not extract dynamic gist via LLM: {ex}")
+        except Exception as ex:
+            logger.warning(f"Could not extract dynamic gist via LLM: {ex}")
 
     active_policy_document["gist"] = gist
     return {
@@ -275,6 +275,7 @@ async def websocket_audio_endpoint(websocket: WebSocket):
     logger.info(f"Client connected to /ws/audio (custom key: {bool(query_api_key)})")
 
     current_transcript = ""
+    endpoint_fallback_task: Optional[asyncio.Task] = None
 
     # Callbacks for STT partials and finals
     async def on_stt_partial(text: str):
@@ -288,31 +289,39 @@ async def websocket_audio_endpoint(websocket: WebSocket):
         })
 
     async def on_stt_final(text: str):
-        nonlocal current_transcript
+        nonlocal current_transcript, endpoint_fallback_task
         clean_text = text.strip()
         if not clean_text:
             return
 
-        logger.info(f"STT final received: '{clean_text}' (state: {turn_manager.state})")
-        current_transcript = clean_text
+        if endpoint_fallback_task and not endpoint_fallback_task.done():
+            endpoint_fallback_task.cancel()
+            endpoint_fallback_task = None
 
-        await send_json({
-            "type": "final_transcript",
-            "text": clean_text
-        })
+        logger.info(f"STT final received: '{clean_text}' (state: {turn_manager.state})")
+        current_transcript = ""
 
         if turn_manager.state == AgentState.LISTENING:
             if len(clean_text) > 1 and clean_text.lower() not in ["i", "a", "the", "uh", "um", "ah", "oh"]:
                 t_speech_stopped = vad.last_speech_time or time.time()
                 vad_hangover = vad.silence_hangover_ms
                 stt_latency_ms = max(int((time.time() - t_speech_stopped) * 1000) - vad_hangover, 50)
-                current_transcript = ""
                 vad.reset()
                 _sync_agent_policy()
                 await turn_manager.handle_speech_endpoint(
                     clean_text,
                     vad_duration_ms=vad_hangover,
                     stt_duration_ms=stt_latency_ms,
+                )
+        elif turn_manager.state == AgentState.THINKING:
+            # If the turn is currently thinking, update the turn with the complete STT final transcript
+            if len(clean_text) > 1 and clean_text.lower() not in ["i", "a", "the", "uh", "um", "ah", "oh"]:
+                logger.info(f"Updating active THINKING turn with complete STT final: '{clean_text}'")
+                _sync_agent_policy()
+                await turn_manager.handle_speech_endpoint(
+                    clean_text,
+                    vad_duration_ms=0,
+                    stt_duration_ms=0,
                 )
 
     async def send_json(data: dict):
@@ -453,29 +462,37 @@ async def websocket_audio_endpoint(websocket: WebSocket):
 
                 if is_barge_in:
                     logger.info("Barge-in detected by VAD.")
+                    if endpoint_fallback_task and not endpoint_fallback_task.done():
+                        endpoint_fallback_task.cancel()
+                        endpoint_fallback_task = None
                     current_transcript = ""
                     await turn_manager.handle_barge_in()
                     vad.reset()
 
                 if is_endpoint and turn_manager.state == AgentState.LISTENING:
-                    transcript = current_transcript.strip()
-                    if len(transcript) > 1 and transcript.lower() not in ["i", "a", "the", "uh", "um", "ah", "oh"]:
-                        transcript_to_send = transcript
-                        current_transcript = ""
-                        t_speech_stopped = vad.last_speech_time or time.time()
-                        vad_hangover = vad.silence_hangover_ms
-                        stt_latency_ms = max(int((time.time() - t_speech_stopped) * 1000) - vad_hangover, 50)
-                        vad.reset()
-                        _sync_agent_policy()
-                        await turn_manager.handle_speech_endpoint(
-                            transcript_to_send,
-                            vad_duration_ms=vad_hangover,
-                            stt_duration_ms=stt_latency_ms,
-                        )
-                    else:
-                        # User stopped speaking, but Sarvam STT cloud transcript may still be arriving over network.
-                        # Do not wipe current_transcript; let on_stt_final handle it when the final frame arrives.
-                        vad.reset()
+                    vad.reset()
+                    if endpoint_fallback_task and not endpoint_fallback_task.done():
+                        endpoint_fallback_task.cancel()
+                        endpoint_fallback_task = None
+
+                    candidate = current_transcript.strip()
+                    if candidate and len(candidate) > 1 and candidate.lower() not in ["i", "a", "the", "uh", "um", "ah", "oh"]:
+                        async def _fallback_dispatch(text_to_send: str):
+                            try:
+                                # Wait 350ms grace period to allow Sarvam cloud STT to deliver the authoritative final frame
+                                await asyncio.sleep(0.35)
+                                if turn_manager.state == AgentState.LISTENING and text_to_send:
+                                    logger.info(f"VAD fallback endpoint fired: '{text_to_send}'")
+                                    _sync_agent_policy()
+                                    await turn_manager.handle_speech_endpoint(
+                                        text_to_send,
+                                        vad_duration_ms=vad.silence_hangover_ms,
+                                        stt_duration_ms=120,
+                                    )
+                            except asyncio.CancelledError:
+                                pass
+
+                        endpoint_fallback_task = asyncio.create_task(_fallback_dispatch(candidate))
 
             elif "text" in message and message["text"]:
                 try:
@@ -598,6 +615,8 @@ async def websocket_audio_endpoint(websocket: WebSocket):
     except Exception as e:
         logger.error(f"WebSocket session error: {e}", exc_info=True)
     finally:
+        if endpoint_fallback_task and not endpoint_fallback_task.done():
+            endpoint_fallback_task.cancel()
         if inactivity_task and not inactivity_task.done():
             inactivity_task.cancel()
         if turn_manager.active_turn_task and not turn_manager.active_turn_task.done():
